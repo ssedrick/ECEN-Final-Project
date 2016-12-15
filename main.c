@@ -4,25 +4,39 @@
 #include "lcd.h"
 
 #define LENGTH 68
+#define BTN1 0x0020      // P2.5
+#define BTN2 0x0010      // P2.4
+#define BTN3 0x0008      // P2.3
+#define JSY  0x0040      // P1.6
+#define JSX  0x0010      // P1.4
 
+int adc[7] = {0};
+
+TSPoint getJoystick(void);
+void initJoystick(void);
 int handleMenu(float*, float*, int*, int*);
 void start2PGame(float*, float*, int*, int*);
 void drawBoard(void);
 void endGame(void);
+
 
 /*
  * main.c
  */
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
-    P2OUT |= 0x30;   // Set up button
 
-    initLCDScreen();
+    initJoystick();
+
+    P2DIR |= 0x0000;
+    P2OUT |= BTN1 | BTN2 | BTN3;   // Set up button
+
+	initLCDScreen();
 
     float ratioX, ratioY;
     int xMin, yMin;
 
-    // calibrateScreen(&ratioX, &ratioY, &xMin, &yMin);
+    calibrateScreen(&ratioX, &ratioY, &xMin, &yMin);
 
   	fillScreen(WHITE);
 
@@ -52,9 +66,34 @@ int main(void) {
 	return 0;
 }
 
+TSPoint getJoystick(void)
+{
+	TSPoint location;
+
+	ADC10CTL0 &= ~ENC;
+	while (ADC10CTL1 & BUSY);
+	ADC10SA = (unsigned)&adc[0]; //RAM Address of ADC Data, must be reset every conversion
+	ADC10CTL0 |= (ENC | ADC10SC); //Start ADC Conversion
+	while (ADC10CTL1 & BUSY);
+
+	location.x = adc[4];
+	location.y = adc[6];
+
+	return location;
+}
+
+void initJoystick(void)
+{
+	ADC10CTL1 = INCH_6 | CONSEQ_1; // A4 + A3 + A2 + A1, single sequence
+	ADC10CTL0 = ADC10SHT_2 | MSC | ADC10ON;
+	while (ADC10CTL1 & BUSY);
+	ADC10DTC1 = 0x07; // 4 conversions
+	ADC10AE0 |= 0x7F; // ADC10 option select
+}
+
 int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 {
-	TSPoint p;
+	TSPoint p, j;
 	int chosen=0, choice=1, b=0, pixelY;
 	// TODO drawButton("1P Game", 7, , , 70, 30, RED, WHITE);
 	drawButton("Play", 4, 120, 160, 70, 30, RED, WHITE);
@@ -70,8 +109,10 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 	{
 		waitMS(10);
 		p = getTSPoint();
-		// j = getJoystick();
-		b = 1;
+		j = getJoystick();
+		//j.x = P1IN & JSX;
+		//j.y = P1IN & JSY;
+		b = !(P2IN & BTN1);
 
 		if (p.z > 100)
 		{
@@ -84,9 +125,13 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 				chosen = 1;
 			}
 		}
-		else if (!(P2OUT & 0x30))
+		else if (b)
 		{
-			choice = chosen = 1;
+			chosen = 1;
+		}
+		else
+		{
+			j;
 		}
 
 	} while (!chosen);

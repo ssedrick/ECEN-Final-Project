@@ -13,7 +13,7 @@ typedef struct TSPoint
 	int x;
 	int y;
 	int z;
-} TSPoint
+} TSPoint;
 
 // Pin Definitions
 #define LCD_MOSI	0x0080		// data out at P1.7
@@ -32,7 +32,7 @@ typedef struct TSPoint
 #define YPIXEL_MIN 0
 #define YPIXEL_MAX 319
 
-;
+
 void initLCDScreen(void);
 void calibrateScreen(float* , float*, int*, int*);
 void writeLCDData(char);

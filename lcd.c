@@ -116,7 +116,7 @@ void waitMS(unsigned int m_sec)
 void initLCD(void)
 {
     P1OUT = 0x00;						// Set all outputs low for initialization
-    P2OUT = LCD_RST | LCD_CS | LCD_DC;
+    P2OUT |= LCD_RST | LCD_CS | LCD_DC;
 
 	P2OUT |= LCD_RST;					// Reset LCD
 	waitMS(10);
