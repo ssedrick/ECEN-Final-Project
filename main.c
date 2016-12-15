@@ -10,12 +10,12 @@
 #define JSY  0x0040      // P1.6
 #define JSX  0x0010      // P1.4
 
-int adc[7] = {0};
 
 TSPoint getJoystick(void);
-void initJoystick(void);
 int handleMenu(float*, float*, int*, int*);
+int handleMove(short board[][3], int pixelX, int pixelY, int turn);
 void start2PGame(float*, float*, int*, int*);
+void drawX(int, int, int, int);
 void drawBoard(void);
 void endGame(void);
 
@@ -25,8 +25,6 @@ void endGame(void);
  */
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
-
-    initJoystick();
 
     P2DIR |= 0x0000;
     P2OUT |= BTN1 | BTN2 | BTN3;   // Set up button
@@ -70,30 +68,27 @@ TSPoint getJoystick(void)
 {
 	TSPoint location;
 
-	ADC10CTL0 &= ~ENC;
-	while (ADC10CTL1 & BUSY);
-	ADC10SA = (unsigned)&adc[0]; //RAM Address of ADC Data, must be reset every conversion
-	ADC10CTL0 |= (ENC | ADC10SC); //Start ADC Conversion
-	while (ADC10CTL1 & BUSY);
+	ADC10CTL0 = 0x1010;
+	ADC10CTL1 = 0x4000;
+	ADC10AE0 = JSX;
+	ADC10CTL0 |= 0x0003;
+	while (ADC10CTL1 & 0x0001);
+	location.x = ADC10MEM;
 
-	location.x = adc[4];
-	location.y = adc[6];
+	ADC10CTL0 = 0x1010;
+	ADC10CTL1 = 0x6000;
+	ADC10AE0 = JSY;
+	ADC10CTL0 |= 0x0003;
+	while (ADC10CTL1 & 0x0001);
+	location.y = ADC10MEM;
 
 	return location;
-}
-
-void initJoystick(void)
-{
-	ADC10CTL1 = INCH_6 | CONSEQ_1; // A4 + A3 + A2 + A1, single sequence
-	ADC10CTL0 = ADC10SHT_2 | MSC | ADC10ON;
-	while (ADC10CTL1 & BUSY);
-	ADC10DTC1 = 0x07; // 4 conversions
-	ADC10AE0 |= 0x7F; // ADC10 option select
 }
 
 int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 {
 	TSPoint p, j;
+	j.y = 500;
 	int chosen=0, choice=1, b=0, pixelY;
 	// TODO drawButton("1P Game", 7, , , 70, 30, RED, WHITE);
 	drawButton("Play", 4, 120, 160, 70, 30, RED, WHITE);
@@ -109,10 +104,8 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 	{
 		waitMS(10);
 		p = getTSPoint();
-		j = getJoystick();
-		//j.x = P1IN & JSX;
-		//j.y = P1IN & JSY;
-		b = !(P2IN & BTN1);
+		//j = getJoystick();
+		//b = !(P2IN & BTN1);
 
 		if (p.z > 100)
 		{
@@ -131,7 +124,25 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 		}
 		else
 		{
-			j;
+			if (j.y > 500)
+			{
+				if (!choice)
+				{
+					drawHorizontalLine(82, 158, 178, BLU);
+					drawHorizontalLine(82, 158, 228, WHITE);
+					choice = 1;
+
+				}
+			}
+			else if (j.y < 450)
+			{
+				if (choice)
+				{
+					drawHorizontalLine(82, 158, 178, WHITE);
+					drawHorizontalLine(82, 158, 228, BLU);
+					choice = 0;
+				}
+			}
 		}
 
 	} while (!chosen);
@@ -141,18 +152,81 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 
 void start2PGame(float* ratioX, float* ratioY, int* xMin, int* yMin)
 {
-	int turn = 1;
-	TSPoint underline;
+	int turn=1, b=0, pixelX, pixelY;
+	TSPoint underline, j, p;
+	j.y = 470;
+	j.x = 470;
 	underline.x = 13;
 	underline.y = 80;
+	short board[3][3] = {0};
 	fillScreen(WHITE);
 	drawBoard();
 	drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, RED);
 
 	while (turn > 0)
 	{
+		waitMS(100);
+		p = getTSPoint();
+		//j = getJoystick();
+		//b = !(P2IN & BTN1);
 
+		if (p.z > 100)
+		{
+			pixelY = (p.y - *yMin) * (*ratioY);
+			pixelX = (p.x - *xMin) * (*ratioX);
+			turn = handleMove(board, pixelX, pixelY, turn);
+			//TODO checkWin();
+		}
+		else if (b)
+		{
+			turn = handleMove(board, underline.x, underline.y, turn);
+		}
+		else
+		{
+			drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, WHITE);
+			if (j.y > 600)
+			{
+				if (underline.y > 84)
+					underline.y -= 74;
+			}
+			else if (j.y < 350)
+			{
+				if (underline.y < 156)
+					underline.y += 74;
+			}
+			if (j.x > 600)
+			{
+				if (underline.x < 154)
+					underline.x += 74;
+			}
+			else if (j.x < 350)
+			{
+				if (underline.x > 84)
+					underline.x -= 74;
+			}
+			drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, RED);
+		}
 	}
+}
+
+int handleMove(short board[][3], int pixelX, int pixelY, int turn)
+{
+	unsigned int iX = pixelX / 74;
+	unsigned int iY = (pixelY - 40) / 74;
+	iY = (iY > 3 ? 3 : iY);
+	if (!(board[iY][iX]))
+	{
+		board[iY][iX] = turn;
+		iY = iY * 74 + 47;
+		iX = iX * 74 + 47;
+		if (turn == 1)
+			drawX(iX, iY, 30, GRN);
+		else
+			drawCircle(iX, iY, 25, RED);
+		turn = (turn == 1 ? 2 : 1);
+	}
+
+	return turn;
 }
 
 void drawBoard(void)
@@ -161,6 +235,13 @@ void drawBoard(void)
 	drawHorizontalLine(10, 230, 156, BLK);
 	drawVerticalLine(84, 10, 230, BLK);
 	drawVerticalLine(156, 10, 230, BLK);
+}
+
+void drawX(int x, int y, int size, int color)
+{
+	size = size / 2;
+	drawLine(x - size, y - size, x + size, y + size, color);
+	drawLine(x - size, y + size, x + size, y - size, color);
 }
 
 void endGame(void)
