@@ -10,13 +10,17 @@
 #define JSY  0x0040      // P1.6
 #define JSX  0x0010      // P1.4
 
+#define MAXSIZE 3
+
 
 TSPoint getJoystick(void);
 int handleMenu(float*, float*, int*, int*);
-int handleMove(short board[][3], int pixelX, int pixelY, int turn);
+int handleMove(short board[][MAXSIZE], int pixelX, int pixelY, int turn, int * numTurns);
+short checkBoard(short board[][MAXSIZE], int turn);
 void start2PGame(float*, float*, int*, int*);
 void drawX(int, int, int, int);
 void drawBoard(void);
+void printWin(short);
 void endGame(void);
 
 
@@ -88,7 +92,6 @@ TSPoint getJoystick(void)
 int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 {
 	TSPoint p, j;
-	j.y = 500;
 	int chosen=0, choice=1, b=0, pixelY;
 	// TODO drawButton("1P Game", 7, , , 70, 30, RED, WHITE);
 	drawButton("Play", 4, 120, 160, 70, 30, RED, WHITE);
@@ -104,8 +107,8 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 	{
 		waitMS(10);
 		p = getTSPoint();
-		//j = getJoystick();
-		//b = !(P2IN & BTN1);
+		j = getJoystick();
+		b = !(P2IN & BTN1);
 
 		if (p.z > 100)
 		{
@@ -152,10 +155,8 @@ int handleMenu(float * ratioX, float * ratioY, int* xMin, int* yMin)
 
 void start2PGame(float* ratioX, float* ratioY, int* xMin, int* yMin)
 {
-	int turn=1, b=0, pixelX, pixelY;
+	int turn=1, b=0, pixelX, pixelY, numTurns=0;
 	TSPoint underline, j, p;
-	j.y = 470;
-	j.x = 470;
 	underline.x = 13;
 	underline.y = 80;
 	short board[3][3] = {0};
@@ -163,33 +164,52 @@ void start2PGame(float* ratioX, float* ratioY, int* xMin, int* yMin)
 	drawBoard();
 	drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, RED);
 
-	while (turn > 0)
+	while (turn > 0 && numTurns < 9)
 	{
 		waitMS(100);
 		p = getTSPoint();
-		//j = getJoystick();
-		//b = !(P2IN & BTN1);
+		j = getJoystick();
+		b = !(P2IN & BTN1);
 
 		if (p.z > 100)
 		{
 			pixelY = (p.y - *yMin) * (*ratioY);
 			pixelX = (p.x - *xMin) * (*ratioX);
-			turn = handleMove(board, pixelX, pixelY, turn);
-			//TODO checkWin();
+			turn = handleMove(board, pixelX, pixelY, turn, &numTurns);
+			if (checkBoard(board, 1))
+			{
+				printWin(1);
+				return;
+			}
+			else if (checkBoard(board, 2))
+			{
+				printWin(2);
+				return;
+			}
 		}
 		else if (b)
 		{
-			turn = handleMove(board, underline.x, underline.y, turn);
+			turn = handleMove(board, underline.x, underline.y, turn, &numTurns);
+			if (checkBoard(board, 1))
+			{
+				printWin(1);
+				return;
+			}
+			else if (checkBoard(board, 2))
+			{
+				printWin(2);
+				return;
+			}
 		}
 		else
 		{
 			drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, WHITE);
-			if (j.y > 600)
+			if (j.y < 350)
 			{
 				if (underline.y > 84)
 					underline.y -= 74;
 			}
-			else if (j.y < 350)
+			else if (j.y > 600)
 			{
 				if (underline.y < 156)
 					underline.y += 74;
@@ -207,9 +227,13 @@ void start2PGame(float* ratioX, float* ratioY, int* xMin, int* yMin)
 			drawHorizontalLine(underline.x, underline.x + LENGTH, underline.y, RED);
 		}
 	}
+
+	drawWord("Draw!", 5, 50, 250, BLK);
+	waitMS(1000);
+	fillScreen(WHITE);
 }
 
-int handleMove(short board[][3], int pixelX, int pixelY, int turn)
+int handleMove(short board[][3], int pixelX, int pixelY, int turn, int * numTurns)
 {
 	unsigned int iX = pixelX / 74;
 	unsigned int iY = (pixelY - 40) / 74;
@@ -223,6 +247,7 @@ int handleMove(short board[][3], int pixelX, int pixelY, int turn)
 			drawX(iX, iY, 30, GRN);
 		else
 			drawCircle(iX, iY, 25, RED);
+		(*numTurns)++;
 		turn = (turn == 1 ? 2 : 1);
 	}
 
@@ -242,6 +267,57 @@ void drawX(int x, int y, int size, int color)
 	size = size / 2;
 	drawLine(x - size, y - size, x + size, y + size, color);
 	drawLine(x - size, y + size, x + size, y - size, color);
+}
+
+short checkBoard(short board[][MAXSIZE], int turn)
+{
+	short won = 1, i, j;
+
+	for (i = 0; i < MAXSIZE; i++) // check rows
+	{
+		won = 1;
+		for (j = 0; j < MAXSIZE; j++)
+			if (board[i][j] != turn)
+				won = 0;
+		if (won)
+			return 1;
+	}
+
+	for (j = 0; j < MAXSIZE; j++) // check columns
+	{
+		won = 1;
+		for (i = 0; i < MAXSIZE; i++)
+			if (board[i][j] != turn)
+				won = 0;
+		if (won)
+			return 1;
+	}
+
+	won = 1;
+	for (i = 0; i < MAXSIZE; i++) // check diagonal
+		if (board[i][i] != turn)
+			won = 0;
+	if (won)
+		return 1;
+
+	won = 1;
+	for (i = 0; i < MAXSIZE; i++) // check diagonal
+		if (board[i][MAXSIZE - i - 1] != turn)
+			won = 0;
+
+	if (won)
+		return 1;
+	else
+		return 0;
+}
+
+void printWin(short player)
+{
+	char winner[13] = "Player x won!";
+	winner[7] = player + 48;
+	drawWord(winner, 13, 50, 250, BLK);
+	waitMS(3000);
+	fillScreen(WHITE);
 }
 
 void endGame(void)
